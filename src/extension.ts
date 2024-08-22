@@ -9,6 +9,9 @@ const API_KEY = process.env.OPENAI_API_KEY_BETTERCOMMIT;
 // The OpenAI chat model used for commit message generation
 const MODEL = "gpt-4o-mini";
 
+// The maximum number of characters under which a single request can be made to the OpenAI API
+const SINGLE_REQUEST_THRESHOLD = 64 * 1024;
+
 // The text that will be appended to the SYSTEM message if it is the first commit in the user's repository
 const INITIAL_COMMIT_AUGMENTATION =
 	"This is the initial commit for the repository. " +
@@ -42,6 +45,7 @@ const SYSTEM_MESSAGE_POLISHED_INITIAL_COMMIT = SYSTEM_MESSAGE_POLISHED + "\n" + 
 
 let statusBarItem: vscode.StatusBarItem;
 let initialCommit = false;
+let tokenCount = 0;
 
 
 function isFirstCommit(): Promise<boolean> {
@@ -176,7 +180,14 @@ async function generateCommitMessage() {
 	}
 
 	// Split the diff into chunks
-	const diffChunks = splitDiffString(gitDiff);
+	let diffChunks = splitDiffString(gitDiff);
+
+	const completeDiff = diffChunks.join("\n");
+
+	// If the token count is less than the threshold, use a single request
+	if (completeDiff.length <= SINGLE_REQUEST_THRESHOLD) {
+		diffChunks = [completeDiff];
+	}
 
 	// Generate commit message for each chunk
 	const commitMessage = await generateCommitMessageForChunks(diffChunks);
@@ -216,7 +227,7 @@ export function activate(context: vscode.ExtensionContext) {
 	statusBarItem.text = "$(git-commit) $(comment)";
 	statusBarItem.tooltip = "Generate a commit message";
 	statusBarItem.command = "bettercommitmessages.generateCommitMessage";
-	statusBarItem.name = "bcm.statusBarItem";
+	statusBarItem.name = "Git Commit Message Generator";
 	statusBarItem.show();
 
 	context.subscriptions.push(disposable, statusBarItem);

@@ -2,7 +2,7 @@
   "name": "bettercommitmessages",
   "displayName": "Better Commit Messages",
   "description": "Uses ML to generate commit messages",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "Richard Gerard Marcoux III",
   "enabledApiProposals": [],
   "engines": {
