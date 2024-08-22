@@ -8,6 +8,10 @@
   "engines": {
     "vscode": "^1.92.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:RichmarIII/BetterCommitMessages.git"
+  },
   "categories": [
     "AI"
   ],

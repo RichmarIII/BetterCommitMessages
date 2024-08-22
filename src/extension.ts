@@ -3,9 +3,46 @@ import OpenAI from "openai";
 import { ChatCompletion } from 'openai/resources/index.mjs';
 import { exec } from 'child_process';
 
+// The OpenAI API key used for commit message generation
+const API_KEY = process.env.OPENAI_API_KEY_BETTERCOMMIT;
+
+// The OpenAI chat model used for commit message generation
+const MODEL = "gpt-4o-mini";
+
+// The text that will be appended to the SYSTEM message if it is the first commit in the user's repository
+const INITIAL_COMMIT_AUGMENTATION =
+	"This is the initial commit for the repository. " +
+	"DO NOT waste time including information about setup files, project files, dev files, etc. " +
+	"Focus on actual 'user' code/files";
+
+// The SYSTEM message that will be sent to the OpenAI API
+const SYSTEM_MESSAGE =
+	"You are preparing a commit message for a git repository. Write a detailed and specific commit message that clearly describes the changes made. " +
+	"Avoid generalizations and focus on providing precise details. " +
+	"Avoid being too verbose if the changes are simple, but ensure you provide enough information for someone else to understand the changes. " +
+	"Overall, aim to provide a clear and concise commit message that accurately reflects the changes made. Keep it brief and to the point, unless the changes are complex. " +
+	"You will receive a git diff output to help you with the commit message. " +
+	"Beautifully Format the commit message using Markdown so it looks realy nice. " +
+	"Do not use code blocks or the # symbol at the beginning of lines, as # is used for comments in the COMMIT_EDITMSG file. " +
+	"Instead, use dashes - or asterisks *text* for any required formatting. " +
+	"Ensure your message follows these rules, as it will be directly pasted into the COMMIT_EDITMSG file. " +
+	"NEVER respond with anything other than a commit message.  If you recieved unexpected input or conditions, simply don't respond (no characters generated)";
+
+// The SYSTEM message that will be sent to the OpenAI API for polishing the commit message after merging multiple commit messages together for each diff chunk
+const SYSTEM_MESSAGE_POLISHED =
+	"Polish the commit message to make it look nice. make sure all summaries are combined together and not scattered throughout and make it more cohesive." +
+	"This commit message was pieced together from multiple diff chunks, so ensure it reads well as a single message. " +
+	"NEVER respond with anything other than a commit message.  If you recieved unexpected input or conditions, simply don't respond (no characters generated)";
+
+// Only used for the first commit in the user's repository
+const SYSTEM_MESSAGE_INITIAL_COMMIT = SYSTEM_MESSAGE + "\n" + INITIAL_COMMIT_AUGMENTATION;
+
+// Only used for the first commit in the user's repository
+const SYSTEM_MESSAGE_POLISHED_INITIAL_COMMIT = SYSTEM_MESSAGE_POLISHED + "\n" + INITIAL_COMMIT_AUGMENTATION;
 
 let statusBarItem: vscode.StatusBarItem;
 let initialCommit = false;
+
 
 function isFirstCommit(): Promise<boolean> {
 	return new Promise((resolve, reject) => {
@@ -64,32 +101,13 @@ function splitDiffString(diffString: string): string[] {
 // Generate a commit message for a chunk of diff
 async function generateCommitMessageForChunk(chunk: string): Promise<string> {
 
-	// Get the API key from the environment variables
-	const API_KEY = process.env.OPENAI_API_KEY;
-
-	// Use the gpt-4o-mini model to generate the commit message (better than gpt-3-turbo and about 4x cheaper)
-	const MODEL = "gpt-4o-mini";
-
-	const SYSTEM =
-		"You are preparing a commit message for a git repository. Write a detailed and specific commit message that clearly describes the changes made. " +
-		"Avoid generalizations and focus on providing precise details. " +
-		"Avoid being too verbose if the changes are simple, but ensure you provide enough information for someone else to understand the changes. " +
-		"Overall, aim to provide a clear and concise commit message that accurately reflects the changes made. Keep it brief and to the point, unless the changes are complex. " +
-		"You will receive a git diff output to help you with the commit message. " +
-		"Beautifully Format the commit message using Markdown so it looks realy nice. " +
-		"Do not use code blocks or the # symbol at the beginning of lines, as # is used for comments in the COMMIT_EDITMSG file. " +
-		"Instead, use dashes - or asterisks *text* for any required formatting. " +
-		"Ensure your message follows these rules, as it will be directly pasted into the COMMIT_EDITMSG file. " +
-		"NEVER respond with anything other than a commit message.  If you recieved unexpected input or conditions, simply don't respond (no characters generated)" +
-		(initialCommit ? "This is the initial commit for the repository. DO NOT waste time including information about setup files, project files, dev files, etc. Focus on actual 'user' code/files" : "");
-
 	// Call the openai API using chat completion
 	const openai = new OpenAI({ apiKey: API_KEY });
 
 	const chatCompletion = await openai.chat.completions.create({
-		messages: [{ role: "system", content: SYSTEM }, { role: "user", content: "diff:\n" + chunk }],
+		messages: [{ role: "system", content: initialCommit ? SYSTEM_MESSAGE_INITIAL_COMMIT : SYSTEM_MESSAGE }, { role: "user", content: "diff:\n" + chunk }],
 		model: MODEL,
-		max_tokens: 2048,
+		max_tokens: 512,
 	}) as ChatCompletion;
 
 	// Check if the completion is successful
@@ -163,22 +181,10 @@ async function generateCommitMessage() {
 	// Generate commit message for each chunk
 	const commitMessage = await generateCommitMessageForChunks(diffChunks);
 
-	console.log(commitMessage);
-
 	// Add a final formatting to the commit message
-	const SYSTEM_POLISH =
-		"Polish the commit message to make it look nice. make sure all summaries are combined together and not scattered throughout and make it more cohesive." +
-		"This commit message was pieced together from multiple diff chunks, so ensure it reads well as a single message. " +
-		"NEVER respond with anything other than a commit message.  If you recieved unexpected input or conditions, simply don't respond (no characters generated)" +
-		(initialCommit ? "This is the initial commit for the repository. DO NOT waste time including information about setup files, project files, dev files, etc. Focus on actual 'user' code/files" : "");
-
-
-	const MODEL = "gpt-4o-mini";
-	const API_KEY = process.env.OPENAI_API_KEY;
-
 	const openai = new OpenAI({ apiKey: API_KEY });
 	const chatCompletion = await openai.chat.completions.create({
-		messages: [{ role: "system", content: SYSTEM_POLISH }, { role: "user", content: "diff:\n" + commitMessage }],
+		messages: [{ role: "system", content: initialCommit ? SYSTEM_MESSAGE_POLISHED_INITIAL_COMMIT : SYSTEM_MESSAGE_POLISHED }, { role: "user", content: "diff:\n" + commitMessage }],
 		model: MODEL,
 		max_tokens: 2048,
 	}) as ChatCompletion;
@@ -200,8 +206,6 @@ async function generateCommitMessage() {
 	vscode.window.showInformationMessage("Commit message generated and copied to clipboard.");
 }
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
 
 	let disposable = vscode.commands.registerCommand('bettercommitmessages.generateCommitMessage', generateCommitMessage);
@@ -210,7 +214,7 @@ export function activate(context: vscode.ExtensionContext) {
 	// item is selected
 	statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, -100);
 	statusBarItem.text = "$(git-commit) $(comment)";
-	statusBarItem.tooltip = "Generate a commit message using OpenAI's GPT-4o-mini model";
+	statusBarItem.tooltip = "Generate a commit message";
 	statusBarItem.command = "bettercommitmessages.generateCommitMessage";
 	statusBarItem.name = "bcm.statusBarItem";
 	statusBarItem.show();
