@@ -10,8 +10,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git@github.com:RichmarIII/BetterCommitMessages.git"
+    "url": "https://github.com/RichmarIII/BetterCommitMessages.git"
   },
+  "license": "MIT",
+  "homepage": "https://github.com/RichmarIII/BetterCommitMessages.git#readme",
   "categories": [
     "AI"
   ],
