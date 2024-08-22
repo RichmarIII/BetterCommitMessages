@@ -9,7 +9,7 @@ const API_KEY = process.env.OPENAI_API_KEY_BETTERCOMMIT;
 // The OpenAI chat model used for commit message generation
 const MODEL = "gpt-4o-mini";
 
-// The maximum number of characters under which a single request can be made to the OpenAI API
+// The maximum number of characters under which a single request can be made to the OpenAI API. Otherwise, the diff will be split into chunks and a separate request will be made for each chunk
 const SINGLE_REQUEST_THRESHOLD = 64 * 1024;
 
 // The text that will be appended to the SYSTEM message if it is the first commit in the user's repository
